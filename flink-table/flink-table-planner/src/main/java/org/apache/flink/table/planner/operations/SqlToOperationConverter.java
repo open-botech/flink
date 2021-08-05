@@ -153,6 +153,7 @@ import org.apache.flink.util.StringUtils;
 import org.apache.calcite.rel.RelRoot;
 import org.apache.calcite.rel.hint.HintStrategyTable;
 import org.apache.calcite.rel.hint.RelHint;
+import org.apache.calcite.sql.SqlCharStringLiteral;
 import org.apache.calcite.sql.SqlDialect;
 import org.apache.calcite.sql.SqlIdentifier;
 import org.apache.calcite.sql.SqlKind;
@@ -163,6 +164,7 @@ import org.apache.calcite.sql.dialect.CalciteSqlDialect;
 import org.apache.calcite.sql.parser.SqlParser;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -485,6 +487,12 @@ public class SqlToOperationConverter {
         }
     }
 
+    private Map<String, Object> parseFunctionParameter(SqlCharStringLiteral functionParamter) {
+        return Arrays.stream(functionParamter.getValueAs(String.class).split(","))
+                .map(entry -> entry.split("="))
+                .collect(Collectors.toMap(entry -> entry[0].trim(), entry -> entry[1].trim()));
+    }
+
     private Operation convertAlterTableOptions(
             ObjectIdentifier tableIdentifier,
             CatalogTable oldTable,
@@ -547,9 +555,12 @@ public class SqlToOperationConverter {
                     parseLanguage(sqlCreateFunction.getFunctionLanguage()));
         } else {
             FunctionLanguage language = parseLanguage(sqlCreateFunction.getFunctionLanguage());
+            Map<String, Object> parameter =
+                    parseFunctionParameter(sqlCreateFunction.getFunctionParamter());
             CatalogFunction catalogFunction =
                     new CatalogFunctionImpl(
                             sqlCreateFunction.getFunctionClassName().getValueAs(String.class),
+                            parameter,
                             language);
             ObjectIdentifier identifier = catalogManager.qualifyIdentifier(unresolvedIdentifier);
 
