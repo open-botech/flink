@@ -35,28 +35,25 @@ Create a TableEnvironment
 The recommended way to create a `TableEnvironment` is to create from an `EnvironmentSettings` object:
 
 ```python
-
 from pyflink.table import EnvironmentSettings, TableEnvironment
 
 # create a streaming TableEnvironment
-env_settings = EnvironmentSettings.new_instance().in_streaming_mode().build()
-# or a batch TableEnvironment
-# env_settings = EnvironmentSettings.new_instance().in_batch_mode().build()
-table_env = TableEnvironment.create(env_settings)
+env_settings = EnvironmentSettings.in_streaming_mode()
 
+# or a batch TableEnvironment
+# env_settings = EnvironmentSettings.in_batch_mode()
+table_env = TableEnvironment.create(env_settings)
 ```
 
-Alternatively, users can create a StreamTableEnvironment from an existing StreamExecutionEnvironment to interoperate with the DataStream API.
+Alternatively, users can create a `StreamTableEnvironment` from an existing `StreamExecutionEnvironment` to interoperate with the DataStream API.
 
 ```python
-
 from pyflink.datastream import StreamExecutionEnvironment
-from pyflink.table import StreamTableEnvironment, BatchTableEnvironment, TableConfig
+from pyflink.table import StreamTableEnvironment
 
-# create a blink streaming TableEnvironment from a StreamExecutionEnvironment
+# create a streaming TableEnvironment from a StreamExecutionEnvironment
 env = StreamExecutionEnvironment.get_execution_environment()
 table_env = StreamTableEnvironment.create(env)
-
 ```
 
 TableEnvironment API
@@ -263,18 +260,6 @@ These APIs are used to create/remove Table API/SQL Tables and write queries:
       </td>
       <td class="text-center">
         {{< pythondoc file="pyflink.table.html#pyflink.table.TableEnvironment.sql_update" name="link">}}
-      </td>
-    </tr>
-    <tr>
-      <td>
-        <strong>connect(connector_descriptor)</strong>
-      </td>
-      <td>
-        Creates a temporary table from a descriptor. 
-        Currently the recommended way is using <strong>execute_sql</strong> to register temporary tables.
-      </td>
-      <td class="text-center">
-        {{< pythondoc file="pyflink.table.html#pyflink.table.TableEnvironment.connect" name="link">}}
       </td>
     </tr>
   </tbody>
@@ -514,7 +499,7 @@ For more details about the different kinds of UDFs, please refer to [User Define
 ### Dependency Management
 
 These APIs are used to manage the Python dependencies which are required by the Python UDFs.
-Please refer to the [Dependency Management]({{< ref "docs/dev/python/table/dependency_management" >}}#python-dependency-in-python-program) documentation for more details.
+Please refer to the [Dependency Management]({{< ref "docs/dev/python/dependency_management" >}}#python-dependencies) documentation for more details.
 
 <table class="table table-bordered">
   <thead>
@@ -581,7 +566,7 @@ Please refer to the [Dependency Management]({{< ref "docs/dev/python/table/depen
       <td>
         Returns the table config to define the runtime behavior of the Table API.
         You can find all the available configuration options in <a href="{{< ref "docs/deployment/config" >}}">Configuration</a> and
-        <a href="{{< ref "docs/dev/python/python_config" >}}">Python Configuation</a>. <br> <br>
+        <a href="{{< ref "docs/dev/python/python_config" >}}">Python Configuration</a>. <br> <br>
         The following code is an example showing how to set the configuration options through this API:
 ```python
 # set the parallelism to 8

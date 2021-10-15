@@ -21,22 +21,28 @@ package org.apache.flink.table.catalog;
 import org.apache.flink.core.testutils.FlinkMatchers;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.Schema;
-import org.apache.flink.table.api.TableSchema;
+import org.apache.flink.table.expressions.CallExpression;
 import org.apache.flink.table.expressions.ResolvedExpression;
 import org.apache.flink.table.expressions.utils.ResolvedExpressionMock;
+import org.apache.flink.table.functions.BuiltInFunctionDefinitions;
+import org.apache.flink.table.functions.FunctionIdentifier;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LocalZonedTimestampType;
 import org.apache.flink.table.types.logical.LogicalType;
+import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.TimestampKind;
 import org.apache.flink.table.types.utils.DataTypeFactoryMock;
 import org.apache.flink.table.utils.ExpressionResolverMocks;
 
 import org.junit.Test;
 
+import javax.annotation.Nullable;
+
 import java.util.Arrays;
 import java.util.Collections;
 
 import static org.apache.flink.table.api.Expressions.callSql;
+import static org.apache.flink.table.api.Expressions.sourceWatermark;
 import static org.apache.flink.table.types.logical.utils.LogicalTypeChecks.isProctimeAttribute;
 import static org.apache.flink.table.types.logical.utils.LogicalTypeChecks.isRowtimeAttribute;
 import static org.apache.flink.table.types.logical.utils.LogicalTypeChecks.isTimeAttribute;
@@ -77,34 +83,36 @@ public class SchemaResolutionTest {
             Schema.newBuilder()
                     .primaryKeyNamed("primary_constraint", "id") // out of order
                     .column("id", DataTypes.INT().notNull())
+                    .withComment("people id")
                     .column("counter", DataTypes.INT().notNull())
                     .column("payload", "ROW<name STRING, age INT, flag BOOLEAN>")
                     .columnByMetadata("topic", DataTypes.STRING(), true)
+                    .withComment("kafka topic")
                     .columnByExpression("ts", callSql(COMPUTED_SQL)) // out of order API expression
+                    .withComment("rowtime")
                     .columnByMetadata("orig_ts", DataTypes.TIMESTAMP(3), "timestamp")
+                    .withComment("the 'origin' timestamp")
                     .watermark("ts", WATERMARK_SQL)
                     .columnByExpression("proctime", PROCTIME_SQL)
                     .build();
 
     // the type of ts_ltz is TIMESTAMP_LTZ
     private static final String COMPUTED_SQL_WITH_TS_LTZ = "ts_ltz - INTERVAL '60' MINUTE";
+
     private static final ResolvedExpression COMPUTED_COLUMN_RESOLVED_WITH_TS_LTZ =
             new ResolvedExpressionMock(DataTypes.TIMESTAMP_LTZ(3), () -> COMPUTED_SQL_WITH_TS_LTZ);
+
     private static final String WATERMARK_SQL_WITH_TS_LTZ = "ts1 - INTERVAL '5' SECOND";
+
     private static final ResolvedExpression WATERMARK_RESOLVED_WITH_TS_LTZ =
             new ResolvedExpressionMock(DataTypes.TIMESTAMP_LTZ(3), () -> WATERMARK_SQL_WITH_TS_LTZ);
+
     private static final Schema SCHEMA_WITH_TS_LTZ =
             Schema.newBuilder()
-                    .primaryKeyNamed("primary_constraint", "id") // out of order
                     .column("id", DataTypes.INT().notNull())
-                    .column("counter", DataTypes.INT().notNull())
-                    .column("payload", "ROW<name STRING, age INT, flag BOOLEAN>")
-                    .columnByMetadata("topic", DataTypes.STRING(), true)
-                    .columnByExpression(
-                            "ts1", callSql(COMPUTED_SQL_WITH_TS_LTZ)) // out of order API expression
+                    .columnByExpression("ts1", callSql(COMPUTED_SQL_WITH_TS_LTZ))
                     .columnByMetadata("ts_ltz", DataTypes.TIMESTAMP_LTZ(3), "timestamp")
                     .watermark("ts1", WATERMARK_SQL_WITH_TS_LTZ)
-                    .columnByExpression("proctime", PROCTIME_SQL)
                     .build();
 
     @Test
@@ -112,7 +120,8 @@ public class SchemaResolutionTest {
         final ResolvedSchema expectedSchema =
                 new ResolvedSchema(
                         Arrays.asList(
-                                Column.physical("id", DataTypes.INT().notNull()),
+                                Column.physical("id", DataTypes.INT().notNull())
+                                        .withComment("people id"),
                                 Column.physical("counter", DataTypes.INT().notNull()),
                                 Column.physical(
                                         "payload",
@@ -120,10 +129,16 @@ public class SchemaResolutionTest {
                                                 DataTypes.FIELD("name", DataTypes.STRING()),
                                                 DataTypes.FIELD("age", DataTypes.INT()),
                                                 DataTypes.FIELD("flag", DataTypes.BOOLEAN()))),
-                                Column.metadata("topic", DataTypes.STRING(), null, true),
-                                Column.computed("ts", COMPUTED_COLUMN_RESOLVED),
+                                Column.metadata("topic", DataTypes.STRING(), null, true)
+                                        .withComment("kafka topic"),
+                                Column.computed("ts", COMPUTED_COLUMN_RESOLVED)
+                                        .withComment("rowtime"),
                                 Column.metadata(
-                                        "orig_ts", DataTypes.TIMESTAMP(3), "timestamp", false),
+                                                "orig_ts",
+                                                DataTypes.TIMESTAMP(3),
+                                                "timestamp",
+                                                false)
+                                        .withComment("the 'origin' timestamp"),
                                 Column.computed("proctime", PROCTIME_RESOLVED)),
                         Collections.singletonList(WatermarkSpec.of("ts", WATERMARK_RESOLVED)),
                         UniqueConstraint.primaryKey(
@@ -150,36 +165,51 @@ public class SchemaResolutionTest {
                 new ResolvedSchema(
                         Arrays.asList(
                                 Column.physical("id", DataTypes.INT().notNull()),
-                                Column.physical("counter", DataTypes.INT().notNull()),
-                                Column.physical(
-                                        "payload",
-                                        DataTypes.ROW(
-                                                DataTypes.FIELD("name", DataTypes.STRING()),
-                                                DataTypes.FIELD("age", DataTypes.INT()),
-                                                DataTypes.FIELD("flag", DataTypes.BOOLEAN()))),
-                                Column.metadata("topic", DataTypes.STRING(), null, true),
                                 Column.computed("ts1", COMPUTED_COLUMN_RESOLVED_WITH_TS_LTZ),
                                 Column.metadata(
-                                        "ts_ltz", DataTypes.TIMESTAMP_LTZ(3), "timestamp", false),
-                                Column.computed("proctime", PROCTIME_RESOLVED)),
+                                        "ts_ltz", DataTypes.TIMESTAMP_LTZ(3), "timestamp", false)),
                         Collections.singletonList(
                                 WatermarkSpec.of("ts1", WATERMARK_RESOLVED_WITH_TS_LTZ)),
-                        UniqueConstraint.primaryKey(
-                                "primary_constraint", Collections.singletonList("id")));
+                        null);
 
         final ResolvedSchema actualStreamSchema = resolveSchema(SCHEMA_WITH_TS_LTZ, true);
         {
             assertThat(actualStreamSchema, equalTo(expectedSchema));
             assertTrue(isRowtimeAttribute(getType(actualStreamSchema, "ts1")));
-            assertTrue(isProctimeAttribute(getType(actualStreamSchema, "proctime")));
         }
 
         final ResolvedSchema actualBatchSchema = resolveSchema(SCHEMA_WITH_TS_LTZ, false);
         {
             assertThat(actualBatchSchema, equalTo(expectedSchema));
             assertFalse(isRowtimeAttribute(getType(actualBatchSchema, "ts1")));
-            assertTrue(isProctimeAttribute(getType(actualBatchSchema, "proctime")));
         }
+    }
+
+    @Test
+    public void testSchemaResolutionWithSourceWatermark() {
+        final ResolvedSchema expectedSchema =
+                new ResolvedSchema(
+                        Collections.singletonList(
+                                Column.physical("ts_ltz", DataTypes.TIMESTAMP_LTZ(1))),
+                        Collections.singletonList(
+                                WatermarkSpec.of(
+                                        "ts_ltz",
+                                        new CallExpression(
+                                                FunctionIdentifier.of(
+                                                        BuiltInFunctionDefinitions.SOURCE_WATERMARK
+                                                                .getName()),
+                                                BuiltInFunctionDefinitions.SOURCE_WATERMARK,
+                                                Collections.emptyList(),
+                                                DataTypes.TIMESTAMP_LTZ(1)))),
+                        null);
+        final ResolvedSchema resolvedSchema =
+                resolveSchema(
+                        Schema.newBuilder()
+                                .column("ts_ltz", DataTypes.TIMESTAMP_LTZ(1))
+                                .watermark("ts_ltz", sourceWatermark())
+                                .build());
+
+        assertThat(resolvedSchema, equalTo(expectedSchema));
     }
 
     @Test
@@ -217,7 +247,8 @@ public class SchemaResolutionTest {
                         .column("ts", DataTypes.TIMESTAMP(3))
                         .watermark("ts", callSql(INVALID_WATERMARK_SQL))
                         .build(),
-                "The watermark output type TIMESTAMP_LTZ(3) is different from input time filed type TIMESTAMP(3).");
+                "The watermark declaration's output data type 'TIMESTAMP_LTZ(3)' is "
+                        + "different from the time field's data type 'TIMESTAMP(3)'.");
 
         testError(
                 Schema.newBuilder()
@@ -269,28 +300,14 @@ public class SchemaResolutionTest {
                 SCHEMA.toString(),
                 equalTo(
                         "(\n"
-                                + "  `id` INT NOT NULL,\n"
+                                + "  `id` INT NOT NULL COMMENT 'people id',\n"
                                 + "  `counter` INT NOT NULL,\n"
                                 + "  `payload` [ROW<name STRING, age INT, flag BOOLEAN>],\n"
-                                + "  `topic` METADATA VIRTUAL,\n"
-                                + "  `ts` AS [orig_ts - INTERVAL '60' MINUTE],\n"
-                                + "  `orig_ts` METADATA FROM 'timestamp',\n"
+                                + "  `topic` METADATA VIRTUAL COMMENT 'kafka topic',\n"
+                                + "  `ts` AS [orig_ts - INTERVAL '60' MINUTE] COMMENT 'rowtime',\n"
+                                + "  `orig_ts` METADATA FROM 'timestamp' COMMENT 'the ''origin'' timestamp',\n"
                                 + "  `proctime` AS [PROCTIME()],\n"
                                 + "  WATERMARK FOR `ts` AS [ts - INTERVAL '5' SECOND],\n"
-                                + "  CONSTRAINT `primary_constraint` PRIMARY KEY (`id`) NOT ENFORCED\n"
-                                + ")"));
-        assertThat(
-                SCHEMA_WITH_TS_LTZ.toString(),
-                equalTo(
-                        "(\n"
-                                + "  `id` INT NOT NULL,\n"
-                                + "  `counter` INT NOT NULL,\n"
-                                + "  `payload` [ROW<name STRING, age INT, flag BOOLEAN>],\n"
-                                + "  `topic` METADATA VIRTUAL,\n"
-                                + "  `ts1` AS [ts_ltz - INTERVAL '60' MINUTE],\n"
-                                + "  `ts_ltz` METADATA FROM 'timestamp',\n"
-                                + "  `proctime` AS [PROCTIME()],\n"
-                                + "  WATERMARK FOR `ts1` AS [ts1 - INTERVAL '5' SECOND],\n"
                                 + "  CONSTRAINT `primary_constraint` PRIMARY KEY (`id`) NOT ENFORCED\n"
                                 + ")"));
     }
@@ -302,30 +319,14 @@ public class SchemaResolutionTest {
                 resolvedSchema.toString(),
                 equalTo(
                         "(\n"
-                                + "  `id` INT NOT NULL,\n"
+                                + "  `id` INT NOT NULL COMMENT 'people id',\n"
                                 + "  `counter` INT NOT NULL,\n"
                                 + "  `payload` ROW<`name` STRING, `age` INT, `flag` BOOLEAN>,\n"
-                                + "  `topic` STRING METADATA VIRTUAL,\n"
-                                + "  `ts` TIMESTAMP(3) *ROWTIME* AS orig_ts - INTERVAL '60' MINUTE,\n"
-                                + "  `orig_ts` TIMESTAMP(3) METADATA FROM 'timestamp',\n"
+                                + "  `topic` STRING METADATA VIRTUAL COMMENT 'kafka topic',\n"
+                                + "  `ts` TIMESTAMP(3) *ROWTIME* AS orig_ts - INTERVAL '60' MINUTE COMMENT 'rowtime',\n"
+                                + "  `orig_ts` TIMESTAMP(3) METADATA FROM 'timestamp' COMMENT 'the ''origin'' timestamp',\n"
                                 + "  `proctime` TIMESTAMP_LTZ(3) NOT NULL *PROCTIME* AS PROCTIME(),\n"
                                 + "  WATERMARK FOR `ts`: TIMESTAMP(3) AS ts - INTERVAL '5' SECOND,\n"
-                                + "  CONSTRAINT `primary_constraint` PRIMARY KEY (`id`) NOT ENFORCED\n"
-                                + ")"));
-
-        final ResolvedSchema resolvedSchemaWithTsLtz = resolveSchema(SCHEMA_WITH_TS_LTZ);
-        assertThat(
-                resolvedSchemaWithTsLtz.toString(),
-                equalTo(
-                        "(\n"
-                                + "  `id` INT NOT NULL,\n"
-                                + "  `counter` INT NOT NULL,\n"
-                                + "  `payload` ROW<`name` STRING, `age` INT, `flag` BOOLEAN>,\n"
-                                + "  `topic` STRING METADATA VIRTUAL,\n"
-                                + "  `ts1` TIMESTAMP_LTZ(3) *ROWTIME* AS ts_ltz - INTERVAL '60' MINUTE,\n"
-                                + "  `ts_ltz` TIMESTAMP_LTZ(3) METADATA FROM 'timestamp',\n"
-                                + "  `proctime` TIMESTAMP_LTZ(3) NOT NULL *PROCTIME* AS PROCTIME(),\n"
-                                + "  WATERMARK FOR `ts1`: TIMESTAMP_LTZ(3) AS ts1 - INTERVAL '5' SECOND,\n"
                                 + "  CONSTRAINT `primary_constraint` PRIMARY KEY (`id`) NOT ENFORCED\n"
                                 + ")"));
     }
@@ -440,27 +441,27 @@ public class SchemaResolutionTest {
     }
 
     private static ResolvedExpression resolveSqlExpression(
-            String sqlExpression, TableSchema inputSchema) {
+            String sqlExpression, RowType inputRowType, @Nullable LogicalType outputType) {
         switch (sqlExpression) {
             case COMPUTED_SQL:
                 assertThat(
-                        inputSchema.getFieldDataType("orig_ts").orElse(null),
-                        equalTo(DataTypes.TIMESTAMP(3)));
+                        getType(inputRowType, "orig_ts"),
+                        equalTo(DataTypes.TIMESTAMP(3).getLogicalType()));
                 return COMPUTED_COLUMN_RESOLVED;
             case COMPUTED_SQL_WITH_TS_LTZ:
                 assertThat(
-                        inputSchema.getFieldDataType("ts_ltz").orElse(null),
-                        equalTo(DataTypes.TIMESTAMP_LTZ(3)));
+                        getType(inputRowType, "ts_ltz"),
+                        equalTo(DataTypes.TIMESTAMP_LTZ(3).getLogicalType()));
                 return COMPUTED_COLUMN_RESOLVED_WITH_TS_LTZ;
             case WATERMARK_SQL:
                 assertThat(
-                        inputSchema.getFieldDataType("ts").orElse(null),
-                        equalTo(DataTypes.TIMESTAMP(3)));
+                        getType(inputRowType, "ts"),
+                        equalTo(DataTypes.TIMESTAMP(3).getLogicalType()));
                 return WATERMARK_RESOLVED;
             case WATERMARK_SQL_WITH_TS_LTZ:
                 assertThat(
-                        inputSchema.getFieldDataType("ts1").orElse(null),
-                        equalTo(DataTypes.TIMESTAMP_LTZ(3)));
+                        getType(inputRowType, "ts1"),
+                        equalTo(DataTypes.TIMESTAMP_LTZ(3).getLogicalType()));
                 return WATERMARK_RESOLVED_WITH_TS_LTZ;
             case PROCTIME_SQL:
                 return PROCTIME_RESOLVED;
@@ -477,5 +478,10 @@ public class SchemaResolutionTest {
                 .orElseThrow(IllegalStateException::new)
                 .getDataType()
                 .getLogicalType();
+    }
+
+    private static LogicalType getType(RowType inputRowType, String field) {
+        final int pos = inputRowType.getFieldIndex(field);
+        return inputRowType.getTypeAt(pos);
     }
 }

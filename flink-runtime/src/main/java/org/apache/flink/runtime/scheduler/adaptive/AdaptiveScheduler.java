@@ -40,7 +40,6 @@ import org.apache.flink.runtime.checkpoint.TaskStateSnapshot;
 import org.apache.flink.runtime.client.JobExecutionException;
 import org.apache.flink.runtime.clusterframework.types.ResourceProfile;
 import org.apache.flink.runtime.concurrent.ComponentMainThreadExecutor;
-import org.apache.flink.runtime.concurrent.FutureUtils;
 import org.apache.flink.runtime.deployment.TaskDeploymentDescriptorFactory;
 import org.apache.flink.runtime.execution.ExecutionState;
 import org.apache.flink.runtime.executiongraph.ArchivedExecutionGraph;
@@ -104,6 +103,7 @@ import org.apache.flink.runtime.util.ResourceCounter;
 import org.apache.flink.util.ExceptionUtils;
 import org.apache.flink.util.FlinkException;
 import org.apache.flink.util.Preconditions;
+import org.apache.flink.util.concurrent.FutureUtils;
 import org.apache.flink.util.function.FunctionWithException;
 import org.apache.flink.util.function.ThrowingConsumer;
 
@@ -737,6 +737,7 @@ public class AdaptiveScheduler
                 jobInformation.getName(),
                 jobStatus,
                 cause,
+                jobInformation.getCheckpointingSettings(),
                 initializationTimestamp);
     }
 
@@ -958,9 +959,15 @@ public class AdaptiveScheduler
             ExecutionGraph executionGraph, ReservedSlots reservedSlots) {
         for (ExecutionVertex executionVertex : executionGraph.getAllExecutionVertices()) {
             final LogicalSlot assignedSlot = reservedSlots.getSlotFor(executionVertex.getID());
-            executionVertex
-                    .getCurrentExecutionAttempt()
-                    .registerProducedPartitions(assignedSlot.getTaskManagerLocation(), false);
+            final CompletableFuture<Void> registrationFuture =
+                    executionVertex
+                            .getCurrentExecutionAttempt()
+                            .registerProducedPartitions(
+                                    assignedSlot.getTaskManagerLocation(), false);
+            Preconditions.checkState(
+                    registrationFuture.isDone(),
+                    "Partition registration must be completed immediately for reactive mode");
+
             executionVertex.tryAssignResource(assignedSlot);
         }
 
@@ -1034,14 +1041,24 @@ public class AdaptiveScheduler
 
     @Override
     public void onFinished(ArchivedExecutionGraph archivedExecutionGraph) {
+
+        @Nullable
+        final Throwable optionalFailure =
+                archivedExecutionGraph.getFailureInfo() != null
+                        ? archivedExecutionGraph.getFailureInfo().getException()
+                        : null;
+        LOG.info(
+                "Job {} reached terminal state {}.",
+                archivedExecutionGraph.getJobID(),
+                archivedExecutionGraph.getState(),
+                optionalFailure);
+
         if (jobStatusListener != null) {
             jobStatusListener.jobStatusChanges(
                     jobInformation.getJobID(),
                     archivedExecutionGraph.getState(),
                     archivedExecutionGraph.getStatusTimestamp(archivedExecutionGraph.getState()),
-                    archivedExecutionGraph.getFailureInfo() != null
-                            ? archivedExecutionGraph.getFailureInfo().getException()
-                            : null);
+                    optionalFailure);
         }
 
         jobTerminationFuture.complete(archivedExecutionGraph.getState());
@@ -1057,7 +1074,7 @@ public class AdaptiveScheduler
         restartBackoffTimeStrategy.notifyFailure(failure);
         if (restartBackoffTimeStrategy.canRestart()) {
             return Executing.FailureResult.canRestart(
-                    Duration.ofMillis(restartBackoffTimeStrategy.getBackoffTime()));
+                    failure, Duration.ofMillis(restartBackoffTimeStrategy.getBackoffTime()));
         } else {
             return Executing.FailureResult.canNotRestart(
                     new JobException(

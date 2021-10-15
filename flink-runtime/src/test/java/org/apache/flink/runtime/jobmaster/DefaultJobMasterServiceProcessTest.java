@@ -53,7 +53,7 @@ public class DefaultJobMasterServiceProcessTest extends TestLogger {
             failedArchivedExecutionGraphFactory =
                     (throwable ->
                             ArchivedExecutionGraph.createFromInitializingJob(
-                                    jobId, "test", JobStatus.FAILED, throwable, 1337));
+                                    jobId, "test", JobStatus.FAILED, throwable, null, 1337));
 
     @Test
     public void testInitializationFailureCompletesResultFuture() {
@@ -197,20 +197,6 @@ public class DefaultJobMasterServiceProcessTest extends TestLogger {
                         .getArchivedExecutionGraph()
                         .getState(),
                 is(JobStatus.FINISHED));
-    }
-
-    @Test
-    public void testJobFinishedByOther() {
-        final CompletableFuture<JobMasterService> jobMasterServiceFuture =
-                new CompletableFuture<>();
-        DefaultJobMasterServiceProcess serviceProcess = createTestInstance(jobMasterServiceFuture);
-        jobMasterServiceFuture.complete(new TestingJobMasterService());
-
-        serviceProcess.jobFinishedByOther();
-
-        assertThat(
-                serviceProcess.getResultFuture(),
-                futureWillCompleteExceptionally(JobNotFinishedException.class, TIMEOUT));
     }
 
     private DefaultJobMasterServiceProcess createTestInstance(

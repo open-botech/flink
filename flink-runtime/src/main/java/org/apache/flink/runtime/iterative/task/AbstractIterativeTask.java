@@ -31,7 +31,7 @@ import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.api.common.typeutils.TypeSerializerFactory;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.core.memory.DataOutputView;
-import org.apache.flink.metrics.MetricGroup;
+import org.apache.flink.metrics.groups.OperatorMetricGroup;
 import org.apache.flink.runtime.execution.Environment;
 import org.apache.flink.runtime.externalresource.ExternalResourceInfoProvider;
 import org.apache.flink.runtime.io.network.api.reader.MutableReader;
@@ -62,6 +62,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 
 /** The abstract base class for all tasks able to participate in an iteration. */
@@ -87,6 +88,8 @@ public abstract class AbstractIterativeTask<S extends Function, OT> extends Batc
     private int superstepNum = 1;
 
     private volatile boolean terminationRequested;
+
+    private final CompletableFuture<Void> terminationCompletionFuture = new CompletableFuture<>();
 
     // --------------------------------------------------------------------------------------------
 
@@ -183,7 +186,7 @@ public abstract class AbstractIterativeTask<S extends Function, OT> extends Batc
     }
 
     @Override
-    public DistributedRuntimeUDFContext createRuntimeContext(MetricGroup metrics) {
+    public DistributedRuntimeUDFContext createRuntimeContext(OperatorMetricGroup metrics) {
         Environment env = getEnvironment();
 
         return new IterativeRuntimeUdfContext(
@@ -311,9 +314,14 @@ public abstract class AbstractIterativeTask<S extends Function, OT> extends Batc
     }
 
     @Override
-    public void cancel() throws Exception {
+    public void terminationCompleted() {
+        this.terminationCompletionFuture.complete(null);
+    }
+
+    @Override
+    public Future<Void> cancel() throws Exception {
         requestTermination();
-        super.cancel();
+        return this.terminationCompletionFuture;
     }
 
     // -----------------------------------------------------------------------------------------------------------------
@@ -400,7 +408,7 @@ public abstract class AbstractIterativeTask<S extends Function, OT> extends Batc
                 ExecutionConfig executionConfig,
                 Map<String, Future<Path>> cpTasks,
                 Map<String, Accumulator<?, ?>> accumulatorMap,
-                MetricGroup metrics,
+                OperatorMetricGroup metrics,
                 ExternalResourceInfoProvider externalResourceInfoProvider,
                 JobID jobID) {
             super(

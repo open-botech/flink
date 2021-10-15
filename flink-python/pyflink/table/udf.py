@@ -134,7 +134,7 @@ class ImperativeAggregateFunction(UserDefinedFunction, Generic[T, ACC]):
     implementations should extend from :class:`~pyflink.table.AggregateFunction` or
     :class:`~pyflink.table.TableAggregateFunction`.
 
-    .. versionadded:: 1.13.0-SNAPSHOT
+    .. versionadded:: 1.13.0
     """
 
     @abc.abstractmethod
@@ -227,7 +227,7 @@ class TableAggregateFunction(ImperativeAggregateFunction):
     output record consists of only one field, the structured record can be omitted, and a scalar
     value can be emitted that will be implicitly wrapped into a row by the runtime.
 
-    .. versionadded:: 1.13.0-SNAPSHOT
+    .. versionadded:: 1.13.0
     """
 
     @abc.abstractmethod
@@ -323,7 +323,7 @@ class UserDefinedFunctionWrapper(object):
 
         if input_types is not None:
             from pyflink.table.types import RowType
-            if not isinstance(input_types, collections.Iterable) \
+            if not isinstance(input_types, collections.abc.Iterable) \
                     or isinstance(input_types, RowType):
                 input_types = [input_types]
 
@@ -444,7 +444,7 @@ class UserDefinedTableFunctionWrapper(UserDefinedFunctionWrapper):
             func, input_types, "general", deterministic, name)
 
         from pyflink.table.types import RowType
-        if not isinstance(result_types, collections.Iterable) \
+        if not isinstance(result_types, collections.abc.Iterable) \
                 or isinstance(result_types, RowType):
             result_types = [result_types]
 
@@ -761,7 +761,7 @@ def udtaf(f: Union[Callable, TableAggregateFunction, Type] = None,
                      (default: general)
     :return: UserDefinedAggregateFunctionWrapper or function.
 
-    .. versionadded:: 1.13.0-SNAPSHOT
+    .. versionadded:: 1.13.0
     """
     if func_type != 'general':
         raise ValueError("The func_type must be 'general', got %s."

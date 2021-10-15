@@ -55,6 +55,9 @@
           "properties" : {
             "web-submit" : {
               "type" : "boolean"
+            },
+            "web-cancel" : {
+              "type" : "boolean"
             }
           }
         }
@@ -925,7 +928,7 @@
           "properties" : {
             "state_size" : {
               "type" : "object",
-              "id" : "urn:jsonschema:org:apache:flink:runtime:rest:messages:checkpoints:MinMaxAvgStatistics",
+              "id" : "urn:jsonschema:org:apache:flink:runtime:rest:messages:checkpoints:StatsSummaryDto",
               "properties" : {
                 "min" : {
                   "type" : "integer"
@@ -935,24 +938,39 @@
                 },
                 "avg" : {
                   "type" : "integer"
+                },
+                "p50" : {
+                  "type" : "number"
+                },
+                "p90" : {
+                  "type" : "number"
+                },
+                "p95" : {
+                  "type" : "number"
+                },
+                "p99" : {
+                  "type" : "number"
+                },
+                "p999" : {
+                  "type" : "number"
                 }
               }
             },
             "end_to_end_duration" : {
               "type" : "object",
-              "$ref" : "urn:jsonschema:org:apache:flink:runtime:rest:messages:checkpoints:MinMaxAvgStatistics"
+              "$ref" : "urn:jsonschema:org:apache:flink:runtime:rest:messages:checkpoints:StatsSummaryDto"
             },
             "alignment_buffered" : {
               "type" : "object",
-              "$ref" : "urn:jsonschema:org:apache:flink:runtime:rest:messages:checkpoints:MinMaxAvgStatistics"
+              "$ref" : "urn:jsonschema:org:apache:flink:runtime:rest:messages:checkpoints:StatsSummaryDto"
             },
             "processed_data" : {
               "type" : "object",
-              "$ref" : "urn:jsonschema:org:apache:flink:runtime:rest:messages:checkpoints:MinMaxAvgStatistics"
+              "$ref" : "urn:jsonschema:org:apache:flink:runtime:rest:messages:checkpoints:StatsSummaryDto"
             },
             "persisted_data" : {
               "type" : "object",
-              "$ref" : "urn:jsonschema:org:apache:flink:runtime:rest:messages:checkpoints:MinMaxAvgStatistics"
+              "$ref" : "urn:jsonschema:org:apache:flink:runtime:rest:messages:checkpoints:StatsSummaryDto"
             }
           }
         },
@@ -1254,6 +1272,9 @@
         },
         "tolerable_failed_checkpoints" : {
           "type" : "integer"
+        },
+        "aligned_checkpoint_timeout" : {
+          "type" : "integer"
         }
       }
     }
@@ -1423,7 +1444,7 @@
           "properties" : {
             "state_size" : {
               "type" : "object",
-              "id" : "urn:jsonschema:org:apache:flink:runtime:rest:messages:checkpoints:MinMaxAvgStatistics",
+              "id" : "urn:jsonschema:org:apache:flink:runtime:rest:messages:checkpoints:StatsSummaryDto",
               "properties" : {
                 "min" : {
                   "type" : "integer"
@@ -1433,12 +1454,27 @@
                 },
                 "avg" : {
                   "type" : "integer"
+                },
+                "p50" : {
+                  "type" : "number"
+                },
+                "p90" : {
+                  "type" : "number"
+                },
+                "p95" : {
+                  "type" : "number"
+                },
+                "p99" : {
+                  "type" : "number"
+                },
+                "p999" : {
+                  "type" : "number"
                 }
               }
             },
             "end_to_end_duration" : {
               "type" : "object",
-              "$ref" : "urn:jsonschema:org:apache:flink:runtime:rest:messages:checkpoints:MinMaxAvgStatistics"
+              "$ref" : "urn:jsonschema:org:apache:flink:runtime:rest:messages:checkpoints:StatsSummaryDto"
             },
             "checkpoint_duration" : {
               "type" : "object",
@@ -1446,11 +1482,11 @@
               "properties" : {
                 "sync" : {
                   "type" : "object",
-                  "$ref" : "urn:jsonschema:org:apache:flink:runtime:rest:messages:checkpoints:MinMaxAvgStatistics"
+                  "$ref" : "urn:jsonschema:org:apache:flink:runtime:rest:messages:checkpoints:StatsSummaryDto"
                 },
                 "async" : {
                   "type" : "object",
-                  "$ref" : "urn:jsonschema:org:apache:flink:runtime:rest:messages:checkpoints:MinMaxAvgStatistics"
+                  "$ref" : "urn:jsonschema:org:apache:flink:runtime:rest:messages:checkpoints:StatsSummaryDto"
                 }
               }
             },
@@ -1460,25 +1496,25 @@
               "properties" : {
                 "buffered" : {
                   "type" : "object",
-                  "$ref" : "urn:jsonschema:org:apache:flink:runtime:rest:messages:checkpoints:MinMaxAvgStatistics"
+                  "$ref" : "urn:jsonschema:org:apache:flink:runtime:rest:messages:checkpoints:StatsSummaryDto"
                 },
                 "processed" : {
                   "type" : "object",
-                  "$ref" : "urn:jsonschema:org:apache:flink:runtime:rest:messages:checkpoints:MinMaxAvgStatistics"
+                  "$ref" : "urn:jsonschema:org:apache:flink:runtime:rest:messages:checkpoints:StatsSummaryDto"
                 },
                 "persisted" : {
                   "type" : "object",
-                  "$ref" : "urn:jsonschema:org:apache:flink:runtime:rest:messages:checkpoints:MinMaxAvgStatistics"
+                  "$ref" : "urn:jsonschema:org:apache:flink:runtime:rest:messages:checkpoints:StatsSummaryDto"
                 },
                 "duration" : {
                   "type" : "object",
-                  "$ref" : "urn:jsonschema:org:apache:flink:runtime:rest:messages:checkpoints:MinMaxAvgStatistics"
+                  "$ref" : "urn:jsonschema:org:apache:flink:runtime:rest:messages:checkpoints:StatsSummaryDto"
                 }
               }
             },
             "start_delay" : {
               "type" : "object",
-              "$ref" : "urn:jsonschema:org:apache:flink:runtime:rest:messages:checkpoints:MinMaxAvgStatistics"
+              "$ref" : "urn:jsonschema:org:apache:flink:runtime:rest:messages:checkpoints:StatsSummaryDto"
             }
           }
         },
@@ -2124,6 +2160,55 @@
               },
               "busyRatio" : {
                 "type" : "number"
+              }
+            }
+          }
+        }
+      }
+    }
+  }, {
+    "url" : "/jobs/:jobid/vertices/:vertexid/flamegraph",
+    "method" : "GET",
+    "status-code" : "200 OK",
+    "file-upload" : false,
+    "path-parameters" : {
+      "pathParameters" : [ {
+        "key" : "jobid"
+      }, {
+        "key" : "vertexid"
+      } ]
+    },
+    "query-parameters" : {
+      "queryParameters" : [ {
+        "key" : "type",
+        "mandatory" : false
+      } ]
+    },
+    "request" : {
+      "type" : "any"
+    },
+    "response" : {
+      "type" : "object",
+      "id" : "urn:jsonschema:org:apache:flink:runtime:webmonitor:threadinfo:JobVertexFlameGraph",
+      "properties" : {
+        "endTimestamp" : {
+          "type" : "integer"
+        },
+        "data" : {
+          "type" : "object",
+          "id" : "urn:jsonschema:org:apache:flink:runtime:webmonitor:threadinfo:JobVertexFlameGraph:Node",
+          "properties" : {
+            "name" : {
+              "type" : "string"
+            },
+            "value" : {
+              "type" : "integer"
+            },
+            "children" : {
+              "type" : "array",
+              "items" : {
+                "type" : "object",
+                "$ref" : "urn:jsonschema:org:apache:flink:runtime:webmonitor:threadinfo:JobVertexFlameGraph:Node"
               }
             }
           }

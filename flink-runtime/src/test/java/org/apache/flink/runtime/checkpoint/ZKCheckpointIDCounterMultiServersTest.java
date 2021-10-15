@@ -21,6 +21,7 @@ package org.apache.flink.runtime.checkpoint;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.HighAvailabilityOptions;
 import org.apache.flink.core.testutils.OneShotLatch;
+import org.apache.flink.runtime.rest.util.NoOpFatalErrorHandler;
 import org.apache.flink.runtime.util.ZooKeeperUtils;
 import org.apache.flink.runtime.zookeeper.ZooKeeperResource;
 import org.apache.flink.util.TestLogger;
@@ -53,7 +54,8 @@ public final class ZKCheckpointIDCounterMultiServersTest extends TestLogger {
         final Configuration configuration = new Configuration();
         configuration.setString(
                 HighAvailabilityOptions.HA_ZOOKEEPER_QUORUM, zooKeeperResource.getConnectString());
-        final CuratorFramework client = ZooKeeperUtils.startCuratorFramework(configuration);
+        final CuratorFramework client =
+                ZooKeeperUtils.startCuratorFramework(configuration, NoOpFatalErrorHandler.INSTANCE);
 
         try {
             OneShotLatch connectionLossLatch = new OneShotLatch();
@@ -64,7 +66,7 @@ public final class ZKCheckpointIDCounterMultiServersTest extends TestLogger {
                             connectionLossLatch, reconnectedLatch);
 
             ZooKeeperCheckpointIDCounter idCounter =
-                    new ZooKeeperCheckpointIDCounter(client, "/checkpoint-id-counter", listener);
+                    new ZooKeeperCheckpointIDCounter(client, listener);
             idCounter.start();
 
             AtomicLong localCounter = new AtomicLong(1L);

@@ -29,36 +29,30 @@ under the License.
 本篇文档是对 PyFlink `TableEnvironment` 的介绍。 
 文档包括对 `TableEnvironment` 类中每个公共接口的详细描述。
 
-
-
 创建 TableEnvironment
 -------------------------
 
 创建 `TableEnvironment` 的推荐方式是通过 `EnvironmentSettings` 对象创建:
 
 ```python
-
 from pyflink.table import EnvironmentSettings, TableEnvironment
 
 # create a streaming TableEnvironment
-env_settings = EnvironmentSettings.new_instance().in_streaming_mode().build()
+env_settings = EnvironmentSettings.in_streaming_mode()
 # or a batch TableEnvironment
-# env_settings = EnvironmentSettings.new_instance().in_batch_mode().build()
+# env_settings = EnvironmentSettings.in_batch_mode()
 table_env = TableEnvironment.create(env_settings)
-
 ```
 
-或者，用户可以从现有的StreamExecutionEnvironment创建StreamTableEnvironment，以与DataStream API进行互操作。
+或者，用户可以从现有的 `StreamExecutionEnvironment` 创建 `StreamTableEnvironment`，以与 DataStream API 进行互操作。
 
 ```python
-
 from pyflink.datastream import StreamExecutionEnvironment
-from pyflink.table import StreamTableEnvironment, BatchTableEnvironment, TableConfig
+from pyflink.table import StreamTableEnvironment
 
-# create a blink streaming TableEnvironment from a StreamExecutionEnvironment
+# create a streaming TableEnvironment from a StreamExecutionEnvironment
 env = StreamExecutionEnvironment.get_execution_environment()
 table_env = StreamTableEnvironment.create(env)
-
 ```
 
 TableEnvironment API
@@ -265,18 +259,6 @@ TableEnvironment API
       </td>
       <td class="text-center">
         {{< pythondoc file="pyflink.table.html#pyflink.table.TableEnvironment.sql_update" name="链接">}}
-      </td>
-    </tr>
-    <tr>
-      <td>
-        <strong>connect(connector_descriptor)</strong>
-      </td>
-      <td>
-        根据描述符创建临时表。 
-        目前推荐的方式是使用 <strong>execute_sql</strong> 来注册临时表。
-      </td>
-      <td class="text-center">
-        {{< pythondoc file="pyflink.table.html#pyflink.table.TableEnvironment.connect" name="链接">}}
       </td>
     </tr>
   </tbody>
@@ -512,7 +494,7 @@ TableEnvironment API
 ### 依赖管理
 
 这些 APIs 用来管理 Python UDFs 所需要的 Python 依赖。
-更多细节可查阅 [依赖管理]({{< ref "docs/dev/python/table/dependency_management" >}}#python-dependency-in-python-program)。
+更多细节可查阅[依赖管理]({{< ref "docs/dev/python/dependency_management" >}}#python-dependencies)。
 
 <table class="table table-bordered">
   <thead>

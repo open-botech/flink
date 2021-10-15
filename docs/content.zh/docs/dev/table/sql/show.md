@@ -28,7 +28,7 @@ under the License.
 
 
 
-SHOW 语句用于列出所有的 catalog，或者列出当前 catalog 中所有的 database，或者列出当前 catalog 和当前 database 的所有表或视图，或者列出当前正在使用的 catalog 和 database, 或者列出当前 catalog 和当前 database 中所有的 function，包括：系统 function 和用户定义的 function，或者仅仅列出当前 catalog 和当前 database 中用户定义的 function，或者列出当前环境所有激活的 module，或者列出当前环境所有加载的 module 及激活状态。
+SHOW 语句用于列出所有的 catalog，或者列出当前 catalog 中所有的 database，或者列出当前 catalog 和当前 database 的所有表或视图，或者列出当前正在使用的 catalog 和 database, 或者列出创建指定表的语句，或者列出当前 catalog 和当前 database 中所有的 function，包括：系统 function 和用户定义的 function，或者仅仅列出当前 catalog 和当前 database 中用户定义的 function，或者列出当前环境所有激活的 module，或者列出当前环境所有加载的 module 及激活状态。
 
 目前 Flink SQL 支持下列 SHOW 语句：
 - SHOW CATALOGS
@@ -36,10 +36,12 @@ SHOW 语句用于列出所有的 catalog，或者列出当前 catalog 中所有�
 - SHOW DATABASES
 - SHOW CURRENT DATABASE
 - SHOW TABLES
+- SHOW CREATE TABLE
 - SHOW VIEWS
 - SHOW FUNCTIONS
 - SHOW MODULES
 - SHOW FULL MODULES
+- SHOW JARS
 
 
 ## 执行 SHOW 语句
@@ -119,6 +121,15 @@ tEnv.executeSql("SHOW TABLES").print();
 // +------------+
 // |   my_table |
 // +------------+
+
+// show create table
+tEnv.executeSql("SHOW CREATE TABLE my_table").print();
+// CREATE TABLE `default_catalog`.`default_db`.`my_table` (
+//   ...
+// ) WITH (
+//   ...
+// )
+
 
 // create a view
 tEnv.executeSql("CREATE VIEW my_view AS ...");
@@ -201,6 +212,13 @@ tEnv.executeSql("SHOW TABLES").print()
 // |   my_table |
 // +------------+
 
+// show create table
+tEnv.executeSql("SHOW CREATE TABLE my_table").print()
+// CREATE TABLE `default_catalog`.`default_db`.`my_table` (
+//  ...
+// ) WITH (
+//  ...
+// )
 // create a view
 tEnv.executeSql("CREATE VIEW my_view AS ...")
 // show views
@@ -253,8 +271,7 @@ tEnv.executeSql("SHOW FULL MODULES").print()
 {{< /tab >}}
 {{< tab "Python" >}}
 ```python
-settings = EnvironmentSettings.new_instance()...
-table_env = StreamTableEnvironment.create(env, settings)
+table_env = StreamTableEnvironment.create(...)
 
 # show catalogs
 table_env.execute_sql("SHOW CATALOGS").print()
@@ -281,6 +298,13 @@ table_env.execute_sql("SHOW TABLES").print()
 # +------------+
 # |   my_table |
 # +------------+
+# show create table
+table_env.executeSql("SHOW CREATE TABLE my_table").print()
+# CREATE TABLE `default_catalog`.`default_db`.`my_table` (
+#   ...
+# ) WITH (
+#   ...
+# )
 
 # create a view
 table_env.execute_sql("CREATE VIEW my_view AS ...")
@@ -346,6 +370,13 @@ Flink SQL> CREATE TABLE my_table (...) WITH (...);
 Flink SQL> SHOW TABLES;
 my_table
 
+Flink SQL> SHOW CREATE TABLE my_table;
+CREATE TABLE `default_catalog`.`default_db`.`my_table` (
+  ...
+) WITH (
+  ...
+)
+
 Flink SQL> CREATE VIEW my_view AS ...;
 [INFO] View has been created.
 
@@ -381,6 +412,8 @@ Flink SQL> SHOW FULL MODULES;
 +-------------+------+
 1 row in set
 
+Flink SQL> SHOW JARS;
+/path/to/addedJar.jar
 
 ```
 {{< /tab >}}
@@ -428,6 +461,16 @@ SHOW TABLES
 
 展示当前 catalog 和当前 database 中所有的表。
 
+## SHOW CREATE TABLE
+
+```sql
+SHOW CREATE TABLE [catalog_name.][db_name.]table_name
+```
+
+展示创建指定表的 create 语句。
+
+<span class="label label-danger">Attention</span> 目前 `SHOW CREATE TABLE` 只支持通过 Flink SQL DDL 创建的表。
+
 ## SHOW VIEWS
 
 ```sql
@@ -457,5 +500,15 @@ SHOW [FULL] MODULES
 
 **FULL**
 展示当前环境加载的所有 module 及激活状态。
+
+## SHOW JARS
+
+```sql
+SHOW JARS
+```
+
+展示所有通过 [`ADD JAR`]({{< ref "docs/dev/table/sql/jar" >}}#add-jar) 语句加入到 session classloader 中的 jar。
+
+<span class="label label-danger">Attention</span> 当前 SHOW JARS 命令只能在 [SQL CLI]({{< ref "docs/dev/table/sqlClient" >}}) 中使用。
 
 {{< top >}}

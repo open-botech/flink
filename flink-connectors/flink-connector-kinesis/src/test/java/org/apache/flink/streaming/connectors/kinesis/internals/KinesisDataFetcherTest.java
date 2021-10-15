@@ -72,10 +72,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static java.util.Collections.singletonList;
-import static org.apache.flink.streaming.connectors.kinesis.config.ConsumerConfigConstants.EFORegistrationType.NONE;
-import static org.apache.flink.streaming.connectors.kinesis.config.ConsumerConfigConstants.EFO_REGISTRATION_TYPE;
-import static org.apache.flink.streaming.connectors.kinesis.config.ConsumerConfigConstants.RECORD_PUBLISHER_TYPE;
-import static org.apache.flink.streaming.connectors.kinesis.config.ConsumerConfigConstants.RecordPublisherType.EFO;
+import static org.apache.flink.streaming.connectors.kinesis.config.ConsumerConfigConstants.SHARD_DISCOVERY_INTERVAL_MILLIS;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -96,14 +93,62 @@ public class KinesisDataFetcherTest extends TestLogger {
         assertTrue(fetcher.isRunning());
     }
 
-    @Test
-    public void testIsRunningFalseAfterShutDown() {
+    @Test(timeout = 10000)
+    public void testIsRunningFalseAfterShutDown() throws InterruptedException {
         KinesisDataFetcher<String> fetcher =
                 createTestDataFetcherWithNoShards(10, 2, "test-stream");
 
         fetcher.shutdownFetcher();
+        fetcher.awaitTermination();
 
         assertFalse(fetcher.isRunning());
+    }
+
+    @Test
+    public void testCancelDuringDiscovery() throws Exception {
+        final String stream = "fakeStream";
+        final int numShards = 3;
+
+        Properties standardProperties = TestUtils.getStandardProperties();
+        standardProperties.setProperty(SHARD_DISCOVERY_INTERVAL_MILLIS, "10000000");
+        final LinkedList<KinesisStreamShardState> testShardStates = new LinkedList<>();
+        final TestSourceContext<String> sourceContext = new TestSourceContext<>();
+        TestableKinesisDataFetcher<String> fetcher =
+                new TestableKinesisDataFetcher<String>(
+                        singletonList(stream),
+                        sourceContext,
+                        standardProperties,
+                        new KinesisDeserializationSchemaWrapper<>(new SimpleStringSchema()),
+                        1,
+                        0,
+                        new AtomicReference<>(),
+                        testShardStates,
+                        new HashMap<>(),
+                        FakeKinesisBehavioursFactory.nonReshardedStreamsBehaviour(
+                                Collections.singletonMap(stream, numShards)));
+
+        // FlinkKinesisConsumer is responsible for setting up the fetcher before it can be run;
+        // run the consumer until it reaches the point where the fetcher starts to run
+        final DummyFlinkKinesisConsumer<String> consumer =
+                new DummyFlinkKinesisConsumer<>(TestUtils.getStandardProperties(), fetcher, 1, 0);
+
+        CheckedThread consumerThread =
+                new CheckedThread() {
+                    @Override
+                    public void go() throws Exception {
+                        consumer.run(new TestSourceContext<>());
+                    }
+                };
+        consumerThread.start();
+
+        // wait for the second discovery to be triggered, that has a high probability to be inside
+        // discovery sleep (10k s)
+        fetcher.waitUntilDiscovery(2);
+
+        Thread.sleep(1000);
+
+        consumer.cancel();
+        consumerThread.sync();
     }
 
     @Test(expected = RuntimeException.class)
@@ -990,19 +1035,15 @@ public class KinesisDataFetcherTest extends TestLogger {
                 fetcher.wasInterrupted);
     }
 
-    @Test
-    public void testRecordPublisherFactoryIsTornDown() {
-        Properties config = TestUtils.getStandardProperties();
-        config.setProperty(RECORD_PUBLISHER_TYPE, EFO.name());
-        config.setProperty(EFO_REGISTRATION_TYPE, NONE.name());
-
+    @Test(timeout = 1000L)
+    public void testRecordPublisherFactoryIsTornDown() throws InterruptedException {
         KinesisProxyV2Interface kinesisV2 = mock(KinesisProxyV2Interface.class);
 
         TestableKinesisDataFetcher<String> fetcher =
                 new TestableKinesisDataFetcher<String>(
                         singletonList("fakeStream1"),
                         new TestSourceContext<>(),
-                        config,
+                        TestUtils.efoProperties(),
                         new KinesisDeserializationSchemaWrapper<>(new SimpleStringSchema()),
                         10,
                         2,
@@ -1014,7 +1055,64 @@ public class KinesisDataFetcherTest extends TestLogger {
 
         fetcher.shutdownFetcher();
 
+        fetcher.awaitTermination();
+    }
+
+    @Test(timeout = 10000)
+    public void testRecordPublisherFactoryIsTornDownWhenDeregisterStreamConsumerThrowsException()
+            throws InterruptedException {
+        KinesisProxyV2Interface kinesisV2 = mock(KinesisProxyV2Interface.class);
+
+        TestableKinesisDataFetcher<String> fetcher =
+                new TestableKinesisDataFetcher<String>(
+                        singletonList("fakeStream1"),
+                        new TestSourceContext<>(),
+                        TestUtils.efoProperties(),
+                        new KinesisDeserializationSchemaWrapper<>(new SimpleStringSchema()),
+                        10,
+                        2,
+                        new AtomicReference<>(),
+                        new LinkedList<>(),
+                        new HashMap<>(),
+                        mock(KinesisProxyInterface.class),
+                        kinesisV2) {
+                    @Override
+                    protected void deregisterStreamConsumer() {
+                        throw new RuntimeException();
+                    }
+                };
+
+        fetcher.shutdownFetcher();
+
         verify(kinesisV2).close();
+        fetcher.awaitTermination();
+    }
+
+    @Test(timeout = 10000)
+    public void testExecutorServiceShutDownWhenCloseRecordPublisherFactoryThrowsException()
+            throws InterruptedException {
+        TestableKinesisDataFetcher<String> fetcher =
+                new TestableKinesisDataFetcher<String>(
+                        singletonList("fakeStream1"),
+                        new TestSourceContext<>(),
+                        TestUtils.efoProperties(),
+                        new KinesisDeserializationSchemaWrapper<>(new SimpleStringSchema()),
+                        10,
+                        2,
+                        new AtomicReference<>(),
+                        new LinkedList<>(),
+                        new HashMap<>(),
+                        mock(KinesisProxyInterface.class),
+                        mock(KinesisProxyV2Interface.class)) {
+                    @Override
+                    protected void closeRecordPublisherFactory() {
+                        throw new RuntimeException();
+                    }
+                };
+
+        fetcher.shutdownFetcher();
+
+        fetcher.awaitTermination();
     }
 
     private KinesisDataFetcher<String> createTestDataFetcherWithNoShards(

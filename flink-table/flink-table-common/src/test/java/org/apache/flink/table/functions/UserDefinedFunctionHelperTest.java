@@ -35,7 +35,6 @@ import javax.annotation.Nullable;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 import static org.apache.flink.core.testutils.FlinkMatchers.containsCause;
@@ -199,11 +198,6 @@ public class UserDefinedFunctionHelperTest {
         @Override
         public String getClassName() {
             return className;
-        }
-
-        @Override
-        public Map<String, Object> getParameter() {
-            return null;
         }
 
         @Override

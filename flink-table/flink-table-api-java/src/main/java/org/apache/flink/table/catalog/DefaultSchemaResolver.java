@@ -128,23 +128,26 @@ class DefaultSchemaResolver implements SchemaResolver {
 
     private PhysicalColumn resolvePhysicalColumn(UnresolvedPhysicalColumn unresolvedColumn) {
         return Column.physical(
-                unresolvedColumn.getName(),
-                dataTypeFactory.createDataType(unresolvedColumn.getDataType()));
+                        unresolvedColumn.getName(),
+                        dataTypeFactory.createDataType(unresolvedColumn.getDataType()))
+                .withComment(unresolvedColumn.getComment().orElse(null));
     }
 
     private MetadataColumn resolveMetadataColumn(UnresolvedMetadataColumn unresolvedColumn) {
         return Column.metadata(
-                unresolvedColumn.getName(),
-                dataTypeFactory.createDataType(unresolvedColumn.getDataType()),
-                unresolvedColumn.getMetadataKey(),
-                unresolvedColumn.isVirtual());
+                        unresolvedColumn.getName(),
+                        dataTypeFactory.createDataType(unresolvedColumn.getDataType()),
+                        unresolvedColumn.getMetadataKey(),
+                        unresolvedColumn.isVirtual())
+                .withComment(unresolvedColumn.getComment().orElse(null));
     }
 
     private ComputedColumn resolveComputedColumn(
             UnresolvedComputedColumn unresolvedColumn, List<Column> inputColumns) {
         final ResolvedExpression resolvedExpression;
         try {
-            resolvedExpression = resolveExpression(inputColumns, unresolvedColumn.getExpression());
+            resolvedExpression =
+                    resolveExpression(inputColumns, unresolvedColumn.getExpression(), null);
         } catch (Exception e) {
             throw new ValidationException(
                     String.format(
@@ -152,7 +155,8 @@ class DefaultSchemaResolver implements SchemaResolver {
                             unresolvedColumn.getName()),
                     e);
         }
-        return Column.computed(unresolvedColumn.getName(), resolvedExpression);
+        return Column.computed(unresolvedColumn.getName(), resolvedExpression)
+                .withComment(unresolvedColumn.getComment().orElse(null));
     }
 
     private void validateDuplicateColumns(List<Schema.UnresolvedColumn> columns) {
@@ -189,22 +193,26 @@ class DefaultSchemaResolver implements SchemaResolver {
         final ResolvedExpression watermarkExpression;
         try {
             watermarkExpression =
-                    resolveExpression(inputColumns, watermarkSpec.getWatermarkExpression());
+                    resolveExpression(
+                            inputColumns,
+                            watermarkSpec.getWatermarkExpression(),
+                            validatedTimeColumn.getDataType());
         } catch (Exception e) {
             throw new ValidationException(
                     String.format(
                             "Invalid expression for watermark '%s'.", watermarkSpec.toString()),
                     e);
         }
-        validateWatermarkExpression(watermarkExpression.getOutputDataType().getLogicalType());
+        final LogicalType outputType = watermarkExpression.getOutputDataType().getLogicalType();
+        final LogicalType timeColumnType = validatedTimeColumn.getDataType().getLogicalType();
+        validateWatermarkExpression(outputType);
 
-        if (!(watermarkExpression.getOutputDataType().getLogicalType().getTypeRoot()
-                == validatedTimeColumn.getDataType().getLogicalType().getTypeRoot())) {
+        if (outputType.getTypeRoot() != timeColumnType.getTypeRoot()) {
             throw new ValidationException(
                     String.format(
-                            "The watermark output type %s is different from input time filed type %s.",
-                            watermarkExpression.getOutputDataType(),
-                            validatedTimeColumn.getDataType()));
+                            "The watermark declaration's output data type '%s' is different "
+                                    + "from the time field's data type '%s'.",
+                            outputType, timeColumnType));
         }
 
         return Collections.singletonList(
@@ -348,13 +356,15 @@ class DefaultSchemaResolver implements SchemaResolver {
         }
     }
 
-    private ResolvedExpression resolveExpression(List<Column> columns, Expression expression) {
+    private ResolvedExpression resolveExpression(
+            List<Column> columns, Expression expression, @Nullable DataType outputDataType) {
         final LocalReferenceExpression[] localRefs =
                 columns.stream()
                         .map(c -> localRef(c.getName(), c.getDataType()))
                         .toArray(LocalReferenceExpression[]::new);
         return resolverBuilder
                 .withLocalReferences(localRefs)
+                .withOutputDataType(outputDataType)
                 .build()
                 .resolve(Collections.singletonList(expression))
                 .get(0);

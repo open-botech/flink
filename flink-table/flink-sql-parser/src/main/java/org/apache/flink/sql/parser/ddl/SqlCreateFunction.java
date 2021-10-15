@@ -45,8 +45,6 @@ public class SqlCreateFunction extends SqlCreate {
 
     private final SqlCharStringLiteral functionClassName;
 
-    private final SqlCharStringLiteral functionParamter;
-
     private final String functionLanguage;
 
     private final boolean isTemporary;
@@ -57,7 +55,6 @@ public class SqlCreateFunction extends SqlCreate {
             SqlParserPos pos,
             SqlIdentifier functionIdentifier,
             SqlCharStringLiteral functionClassName,
-            SqlCharStringLiteral functionParamter,
             String functionLanguage,
             boolean ifNotExists,
             boolean isTemporary,
@@ -65,7 +62,6 @@ public class SqlCreateFunction extends SqlCreate {
         super(OPERATOR, pos, false, ifNotExists);
         this.functionIdentifier = requireNonNull(functionIdentifier);
         this.functionClassName = requireNonNull(functionClassName);
-        this.functionParamter = requireNonNull(functionParamter);
         this.isSystemFunction = isSystemFunction;
         this.isTemporary = isTemporary;
         this.functionLanguage = functionLanguage;
@@ -118,10 +114,6 @@ public class SqlCreateFunction extends SqlCreate {
 
     public SqlCharStringLiteral getFunctionClassName() {
         return this.functionClassName;
-    }
-
-    public SqlCharStringLiteral getFunctionParamter() {
-        return this.functionParamter;
     }
 
     public String getFunctionLanguage() {

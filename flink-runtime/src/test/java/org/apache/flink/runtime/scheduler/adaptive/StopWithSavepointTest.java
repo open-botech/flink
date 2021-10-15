@@ -174,7 +174,7 @@ public class StopWithSavepointTest extends TestLogger {
             StopWithSavepoint sws = createStopWithSavepoint(ctx);
             ctx.setStopWithSavepoint(sws);
             ctx.setHowToHandleFailure(
-                    (ignore) -> Executing.FailureResult.canRestart(Duration.ZERO));
+                    (throwable) -> Executing.FailureResult.canRestart(throwable, Duration.ZERO));
 
             ctx.setExpectRestarting(assertNonNull());
 
@@ -229,7 +229,7 @@ public class StopWithSavepointTest extends TestLogger {
                     createStopWithSavepoint(ctx, new StateTrackingMockExecutionGraph());
             ctx.setStopWithSavepoint(sws);
             ctx.setHowToHandleFailure(
-                    (ignore) -> Executing.FailureResult.canRestart(Duration.ZERO));
+                    (throwable) -> Executing.FailureResult.canRestart(throwable, Duration.ZERO));
 
             ctx.setExpectRestarting(assertNonNull());
 
@@ -268,6 +268,26 @@ public class StopWithSavepointTest extends TestLogger {
     }
 
     @Test
+    public void testErrorCreatingSavepointLeadsToTransitionToExecutingState() throws Exception {
+        MockStopWithSavepointContext ctx = new MockStopWithSavepointContext();
+        CheckpointScheduling mockStopWithSavepointOperations = new MockCheckpointScheduling();
+        CompletableFuture<String> savepointFuture = new CompletableFuture<>();
+        StopWithSavepoint sws =
+                createStopWithSavepoint(ctx, mockStopWithSavepointOperations, savepointFuture);
+        ctx.setStopWithSavepoint(sws);
+        ctx.setExpectExecuting(
+                executingArguments ->
+                        assertThat(
+                                executingArguments.getExecutionGraph().getState(),
+                                is(JobStatus.RUNNING)));
+
+        savepointFuture.completeExceptionally(new RuntimeException("Test error"));
+
+        ctx.close();
+        assertThat(sws.getOperationFuture().isCompletedExceptionally(), is(true));
+    }
+
+    @Test
     public void testRestartOnTaskFailureAfterSavepointCompletion() throws Exception {
         try (MockStopWithSavepointContext ctx = new MockStopWithSavepointContext()) {
             CheckpointScheduling mockStopWithSavepointOperations = new MockCheckpointScheduling();
@@ -277,7 +297,7 @@ public class StopWithSavepointTest extends TestLogger {
             ctx.setStopWithSavepoint(sws);
 
             ctx.setHowToHandleFailure(
-                    (ignore) -> Executing.FailureResult.canRestart(Duration.ZERO));
+                    (throwable) -> Executing.FailureResult.canRestart(throwable, Duration.ZERO));
 
             ctx.setExpectRestarting(assertNonNull());
 
@@ -376,11 +396,11 @@ public class StopWithSavepointTest extends TestLogger {
                 new StateValidator<>("failing");
         private final StateValidator<ExecutingTest.RestartingArguments> restartingStateValidator =
                 new StateValidator<>("restarting");
-        private final StateValidator<ExecutingTest.ExecutingAndCancellingArguments>
-                cancellingStateValidator = new StateValidator<>("cancelling");
+        private final StateValidator<ExecutingTest.CancellingArguments> cancellingStateValidator =
+                new StateValidator<>("cancelling");
 
-        private final StateValidator<ExecutingTest.ExecutingAndCancellingArguments>
-                executingStateTransition = new StateValidator<>("executing");
+        private final StateValidator<ExecutingTest.CancellingArguments> executingStateTransition =
+                new StateValidator<>("executing");
 
         private StopWithSavepoint state;
 
@@ -396,13 +416,11 @@ public class StopWithSavepointTest extends TestLogger {
             restartingStateValidator.expectInput(asserter);
         }
 
-        public void setExpectCancelling(
-                Consumer<ExecutingTest.ExecutingAndCancellingArguments> asserter) {
+        public void setExpectCancelling(Consumer<ExecutingTest.CancellingArguments> asserter) {
             cancellingStateValidator.expectInput(asserter);
         }
 
-        public void setExpectExecuting(
-                Consumer<ExecutingTest.ExecutingAndCancellingArguments> asserter) {
+        public void setExpectExecuting(Consumer<ExecutingTest.CancellingArguments> asserter) {
             executingStateTransition.expectInput(asserter);
         }
 
@@ -430,7 +448,7 @@ public class StopWithSavepointTest extends TestLogger {
             simulateTransitionToState(Canceling.class);
 
             cancellingStateValidator.validateInput(
-                    new ExecutingTest.ExecutingAndCancellingArguments(
+                    new ExecutingTest.CancellingArguments(
                             executionGraph, executionGraphHandler, operatorCoordinatorHandler));
             hadStateTransition = true;
         }
@@ -474,7 +492,7 @@ public class StopWithSavepointTest extends TestLogger {
                 OperatorCoordinatorHandler operatorCoordinatorHandler) {
             simulateTransitionToState(Executing.class);
             executingStateTransition.validateInput(
-                    new ExecutingTest.ExecutingAndCancellingArguments(
+                    new ExecutingTest.CancellingArguments(
                             executionGraph, executionGraphHandler, operatorCoordinatorHandler));
             hadStateTransition = true;
         }

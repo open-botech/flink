@@ -21,7 +21,8 @@ package org.apache.flink.runtime.leaderelection;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.HighAvailabilityOptions;
 import org.apache.flink.runtime.highavailability.nonha.embedded.EmbeddedLeaderService;
-import org.apache.flink.runtime.testingUtils.TestingUtils;
+import org.apache.flink.runtime.rest.util.NoOpFatalErrorHandler;
+import org.apache.flink.runtime.testutils.TestingUtils;
 import org.apache.flink.runtime.util.ZooKeeperUtils;
 import org.apache.flink.util.TestLogger;
 
@@ -183,7 +184,9 @@ public class LeaderElectionTest extends TestLogger {
                     HighAvailabilityOptions.HA_ZOOKEEPER_QUORUM, testingServer.getConnectString());
             configuration.setString(HighAvailabilityOptions.HA_MODE, "zookeeper");
 
-            client = ZooKeeperUtils.startCuratorFramework(configuration);
+            client =
+                    ZooKeeperUtils.startCuratorFramework(
+                            configuration, NoOpFatalErrorHandler.INSTANCE);
         }
 
         @Override
@@ -201,7 +204,7 @@ public class LeaderElectionTest extends TestLogger {
 
         @Override
         public LeaderElectionService createLeaderElectionService() throws Exception {
-            return ZooKeeperUtils.createLeaderElectionService(client, configuration);
+            return ZooKeeperUtils.createLeaderElectionService(client);
         }
     }
 
@@ -210,8 +213,7 @@ public class LeaderElectionTest extends TestLogger {
 
         @Override
         public void setup() {
-            embeddedLeaderService =
-                    new EmbeddedLeaderService(TestingUtils.defaultExecutionContext());
+            embeddedLeaderService = new EmbeddedLeaderService(TestingUtils.defaultExecutor());
         }
 
         @Override

@@ -1005,7 +1005,7 @@ SqlCreate SqlCreateFunction(Span s, boolean isTemporary) :
         functionClassName = createStringLiteral(token.image, getPos());
     }
     {
-        return new SqlCreateFunction(s.pos(), functionIdentifier, functionClassName, null, null,
+        return new SqlCreateFunction(s.pos(), functionIdentifier, functionClassName, null,
                 false, isTemporary, false);
     }
 }
@@ -1615,7 +1615,63 @@ SqlNode SqlRichExplain() :
 }
 {
     <EXPLAIN> [ <PLAN> <FOR> ]
-    stmt = SqlQueryOrDml() {
-        return new SqlRichExplain(getPos(),stmt);
+    (
+        stmt = OrderedQueryOrExpr(ExprContext.ACCEPT_QUERY)
+        |
+        stmt = RichSqlInsert()
+    )
+    {
+        return new SqlRichExplain(getPos(), stmt);
+    }
+}
+
+/**
+* Parses an ADD JAR statement.
+*/
+SqlAddJar SqlAddJar() :
+{
+    SqlCharStringLiteral jarPath;
+}
+{
+    <ADD> <JAR> <QUOTED_STRING>
+    {
+        String path = SqlParserUtil.parseString(token.image);
+        jarPath = SqlLiteral.createCharString(path, getPos());
+    }
+    {
+        return new SqlAddJar(getPos(), jarPath);
+    }
+}
+
+/**
+* Parses a remove jar statement.
+* REMOVE JAR jar_path;
+*/
+SqlRemoveJar SqlRemoveJar() :
+{
+    SqlCharStringLiteral jarPath;
+}
+{
+    <REMOVE> <JAR> <QUOTED_STRING>
+    {
+        String path = SqlParserUtil.parseString(token.image);
+        jarPath = SqlLiteral.createCharString(path, getPos());
+    }
+    {
+        return new SqlRemoveJar(getPos(), jarPath);
+    }
+}
+
+/**
+* Parses a show jars statement.
+* SHOW JARS;
+*/
+SqlShowJars SqlShowJars() :
+{
+}
+{
+    <SHOW> <JARS>
+    {
+        return new SqlShowJars(getPos());
     }
 }

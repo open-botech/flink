@@ -1,6 +1,6 @@
 ---
 title: "General User-defined Functions"
-weight: 1
+weight: 5
 type: docs
 aliases:
   - /dev/python/table-api-users-guide/udfs/python_udfs.html
@@ -50,7 +50,7 @@ class HashCode(ScalarFunction):
   def eval(self, s):
     return hash(s) * self.factor
 
-settings = EnvironmentSettings.new_instance().in_batch_mode().use_blink_planner().build()
+settings = EnvironmentSettings.in_batch_mode()
 table_env = TableEnvironment.create(settings)
 
 hash_code = udf(HashCode(), result_type=DataTypes.BIGINT())
@@ -80,7 +80,7 @@ public class HashCode extends ScalarFunction {
 '''
 from pyflink.table.expressions import call
 
-settings = EnvironmentSettings.new_instance().in_batch_mode().use_blink_planner().build()
+settings = EnvironmentSettings.in_batch_mode()
 table_env = TableEnvironment.create(settings)
 
 # register the Java function
@@ -150,7 +150,7 @@ class Split(TableFunction):
         for s in string.split(" "):
             yield s, len(s)
 
-env_settings = EnvironmentSettings.new_instance().use_blink_planner().is_streaming_mode().build()
+env_settings = EnvironmentSettings.in_streaming_mode()
 table_env = TableEnvironment.create(env_settings)
 my_table = ...  # type: Table, table schema: [a: String]
 
@@ -188,7 +188,7 @@ public class Split extends TableFunction<Tuple2<String, Integer>> {
 '''
 from pyflink.table.expressions import call
 
-env_settings = EnvironmentSettings.new_instance().use_blink_planner().is_streaming_mode().build()
+env_settings = EnvironmentSettings.in_streaming_mode()
 table_env = TableEnvironment.create(env_settings)
 my_table = ...  # type: Table, table schema: [a: String]
 
@@ -235,7 +235,7 @@ def iterable_func(x):
 
 A user-defined aggregate function (_UDAGG_) maps scalar values of multiple rows to a new scalar value.
 
-**NOTE:** Currently the general user-defined aggregate function is only supported in the GroupBy aggregation and Group Window Aggregation of the blink planner in streaming mode. For batch mode, it's currently not supported and it is recommended to use the [Vectorized Aggregate Functions]({{< ref "docs/dev/python/table/udfs/vectorized_python_udfs" >}}#vectorized-aggregate-functions).
+**NOTE:** Currently the general user-defined aggregate function is only supported in the GroupBy aggregation and Group Window Aggregation in streaming mode. For batch mode, it's currently not supported and it is recommended to use the [Vectorized Aggregate Functions]({{< ref "docs/dev/python/table/udfs/vectorized_python_udfs" >}}#vectorized-aggregate-functions).
 
 The behavior of an aggregate function is centered around the concept of an accumulator. The _accumulator_
 is an intermediate data structure that stores the aggregated values until a final aggregation result
@@ -302,7 +302,7 @@ class WeightedAvg(AggregateFunction):
             DataTypes.FIELD("f1", DataTypes.BIGINT())])
 
 
-env_settings = EnvironmentSettings.new_instance().use_blink_planner().is_streaming_mode().build()
+env_settings = EnvironmentSettings.in_streaming_mode()
 table_env = TableEnvironment.create(env_settings)
 # the result type and accumulator type can also be specified in the udaf decorator:
 # weighted_avg = udaf(WeightedAvg(), result_type=DataTypes.BIGINT(), accumulator_type=...)
@@ -404,7 +404,7 @@ Currently there are 2 limitations to use the ListView and MapView:
 1. The accumulator must be a `Row`.
 2. The `ListView` and `MapView` must be the first level children of the `Row` accumulator.
 
-Please refer to the [documentation of the corresponding classes]({{ site.pythondocs_baseurl }}/api/python/pyflink.table.html#pyflink.table.ListView) for more information about this advanced feature.
+Please refer to the {{< pythondoc file="pyflink.table.html#pyflink.table.ListView" name="documentation of the corresponding classes">}} for more information about this advanced feature.
 
 **NOTE:** For reducing the data transmission cost between Python UDF worker and Java process caused by accessing the data in Flink states(e.g. accumulators and data views), 
 there is a cached layer between the raw state handler and the Python state backend. You can adjust the values of these configuration options to change the behavior of the cache layer for best performance:
@@ -417,8 +417,7 @@ A user-defined table aggregate function (_UDTAGG_) maps scalar values of multipl
 The returned record may consist of one or more fields. If an output record consists of only a single field,
 the structured record can be omitted, and a scalar value can be emitted that will be implicitly wrapped into a row by the runtime.
 
-**NOTE:** Currently the general user-defined table aggregate function is only supported in the GroupBy aggregation
-of the blink planner in streaming mode.
+**NOTE:** Currently the general user-defined table aggregate function is only supported in the GroupBy aggregation in streaming mode.
 
 Similar to an [aggregate function](#aggregate-functions), the behavior of a table aggregate is centered around the concept of an accumulator.
 The accumulator is an intermediate data structure that stores the aggregated values until a final aggregation result is computed.
@@ -430,7 +429,7 @@ the function is called to compute and return the final result.
 
 The following example illustrates the aggregation process:
 
-<img alt="UDTAGG mechanism" src="/fig/udtagg-mechanism.png" width="80%">
+{{<img alt="UDTAGG mechanism" src="/fig/udtagg-mechanism-python.png" width="80%">}}
 
 In the example, we assume a table that contains data about beverages. The table consists of three columns (`id`, `name`,
 and `price`) and 5 rows. We would like to find the 2 highest prices of all beverages in the table, i.e.,
@@ -461,21 +460,13 @@ class Top2(TableAggregateFunction):
     def create_accumulator(self):
         return [None, None]
 
-    def accumulate(self, accumulator, *args):
-        if args[0][0] is not None:
-            if accumulator[0] is None or args[0][0] > accumulator[0]:
+    def accumulate(self, accumulator, row):
+        if row[0] is not None:
+            if accumulator[0] is None or row[0] > accumulator[0]:
                 accumulator[1] = accumulator[0]
-                accumulator[0] = args[0][0]
-            elif accumulator[1] is None or args[0][0] > accumulator[1]:
-                accumulator[1] = args[0][0]
-
-    def retract(self, accumulator, *args):
-        accumulator[0] = accumulator[0] - 1
-
-    def merge(self, accumulator, accumulators):
-        for other_acc in accumulators:
-            self.accumulate(accumulator, other_acc[0])
-            self.accumulate(accumulator, other_acc[1])
+                accumulator[0] = row[0]
+            elif accumulator[1] is None or row[0] > accumulator[1]:
+                accumulator[1] = row[0]
 
     def get_accumulator_type(self):
         return DataTypes.ARRAY(DataTypes.BIGINT())
@@ -485,7 +476,7 @@ class Top2(TableAggregateFunction):
             [DataTypes.FIELD("a", DataTypes.BIGINT())])
 
 
-env_settings = EnvironmentSettings.new_instance().use_blink_planner().is_streaming_mode().build()
+env_settings = EnvironmentSettings.in_streaming_mode()
 table_env = TableEnvironment.create(env_settings)
 # the result type and accumulator type can also be specified in the udtaf decorator:
 # top2 = udtaf(Top2(), result_type=DataTypes.ROW([DataTypes.FIELD("a", DataTypes.BIGINT())]), accumulator_type=DataTypes.ARRAY(DataTypes.BIGINT()))
@@ -497,8 +488,15 @@ t = table_env.from_elements([(1, 'Hi', 'Hello'),
                               (2, 'Hi', 'Hello')], ['a', 'b', 'c'])
 
 # call function "inline" without registration in Table API
-result = t.group_by(t.name).flat_aggregate(top2).to_pandas()
-print(result)
+result = t.group_by(t.b).flat_aggregate(top2).select('*').to_pandas()
+
+# the result is:
+#      b    a
+# 0  Hi2  5.0
+# 1  Hi2  NaN
+# 2   Hi  7.0
+# 3   Hi  3.0
+
 ```
 
 The `accumulate(...)` method of our `Top2` class takes two inputs. The first one is the accumulator

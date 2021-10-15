@@ -279,7 +279,7 @@ and options factory has a higher priority over the predefined options if ever co
 
 RocksDB is a native library that allocates memory directly from the process,
 and not from the JVM. Any memory you assign to RocksDB will have to be accounted for, typically by decreasing the JVM heap size
-of the TaskManagers by the same amount. Not doing that may result in YARN/Mesos/etc terminating the JVM processes for
+of the TaskManagers by the same amount. Not doing that may result in YARN/etc terminating the JVM processes for
 allocating more memory than configured.
 
 **Reading Column Family Options from flink-conf.yaml**
@@ -291,34 +291,167 @@ The default value for `state.backend.rocksdb.options-factory` is in fact `org.ap
 Below is an example how to define a custom ConfigurableOptionsFactory (set class name under `state.backend.rocksdb.options-factory`).
 
 ```java
-
 public class MyOptionsFactory implements ConfigurableRocksDBOptionsFactory {
+    public static final ConfigOption<Integer> BLOCK_RESTART_INTERVAL = ConfigOptions
+            .key("my.custom.rocksdb.block.restart-interval")
+            .intType()
+            .defaultValue(16)
+            .withDescription(
+                    " Block restart interval. RocksDB has default block restart interval as 16. ");
 
-    private static final long DEFAULT_SIZE = 256 * 1024 * 1024;  // 256 MB
-    private long blockCacheSize = DEFAULT_SIZE;
+    private int blockRestartInterval = BLOCK_RESTART_INTERVAL.defaultValue();
 
     @Override
-    public DBOptions createDBOptions(DBOptions currentOptions, Collection<AutoCloseable> handlesToClose) {
-        return currentOptions.setIncreaseParallelism(4)
-               .setUseFsync(false);
+    public DBOptions createDBOptions(DBOptions currentOptions,
+                                     Collection<AutoCloseable> handlesToClose) {
+        return currentOptions
+                .setIncreaseParallelism(4)
+                .setUseFsync(false);
     }
 
     @Override
-    public ColumnFamilyOptions createColumnOptions(
-        ColumnFamilyOptions currentOptions, Collection<AutoCloseable> handlesToClose) {
+    public ColumnFamilyOptions createColumnOptions(ColumnFamilyOptions currentOptions,
+                                                   Collection<AutoCloseable> handlesToClose) {
         return currentOptions.setTableFormatConfig(
-            new BlockBasedTableConfig()
-                .setBlockCacheSize(blockCacheSize)
-                .setBlockSize(128 * 1024));            // 128 KB
+                new BlockBasedTableConfig()
+                        .setBlockRestartInterval(blockRestartInterval));
     }
 
     @Override
-    public RocksDBOptionsFactory configure(Configuration configuration) {
-        this.blockCacheSize =
-            configuration.getLong("my.custom.rocksdb.block.cache.size", DEFAULT_SIZE);
+    public RocksDBOptionsFactory configure(ReadableConfig configuration) {
+        this.blockRestartInterval = configuration.get(BLOCK_RESTART_INTERVAL);
         return this;
     }
 }
 ```
 
 {{< top >}}
+
+## Migrating from Legacy Backends
+
+Beginning in **Flink 1.13**, the community reworked its public state backend classes to help users better understand the separation of local state storage and checkpoint storage.
+This change does not affect the runtime implementation or characteristics of Flink's state backend or checkpointing process; it is simply to communicate intent better.
+Users can migrate existing applications to use the new API without losing any state or consistency. 
+
+### MemoryStateBackend
+
+The legacy `MemoryStateBackend` is equivalent to using [`HashMapStateBackend`](#the-hashmapstatebackend) and [`JobManagerCheckpointStorage`]({{< ref "docs/ops/state/checkpoints#the-jobmanagercheckpointstorage" >}}).
+
+#### `flink-conf.yaml` configuration 
+
+```yaml
+state.backend: hashmap
+
+# Optional, Flink will automatically default to JobManagerCheckpointStorage
+# when no checkpoint directory is specified.
+state.checkpoint-storage: jobmanager
+```
+
+#### Code Configuration
+
+{{< tabs "memorystatebackendmigration" >}}
+{{< tab "Java" >}}
+```java
+StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+env.setStateBackend(new HashMapStateBackend());
+env.getCheckpointConfig().setCheckpointStorage(new JobManagerStateBackend());
+```
+{{< /tab >}}
+{{< tab "Scala" >}}
+```scala
+val env = StreamExecutionEnvironment.getExecutionEnvironment
+env.setStateBackend(new HashMapStateBackend)
+env.getCheckpointConfig().setCheckpointStorage(new JobManagerStateBackend)
+```
+{{< /tab >}}
+{{< /tabs>}}
+
+### FsStateBackend 
+
+The legacy `FsStateBackend` is equivalent to using [`HashMapStateBackend`](#the-hashmapstatebackend) and [`FileSystemCheckpointStorage`]({{< ref "docs/ops/state/checkpoints#the-filesystemcheckpointstorage" >}}).
+
+#### `flink-conf.yaml` configuration
+
+```yaml
+state.backend: hashmap
+state.checkpoints.dir: file:///checkpoint-dir/
+
+# Optional, Flink will automatically default to FileSystemCheckpointStorage
+# when a checkpoint directory is specified.
+state.checkpoint-storage: filesystem
+```
+
+#### Code Configuration
+
+{{< tabs "fsstatebackendbackendmigration" >}}
+{{< tab "Java" >}}
+```java
+StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+env.setStateBackend(new HashMapStateBackend());
+env.getCheckpointConfig().setCheckpointStorage("file:///checkpoint-dir");
+
+
+// Advanced FsStateBackend configurations, such as write buffer size
+// can be set by manually instantiating a FileSystemCheckpointStorage object.
+env.getCheckpointConfig().setCheckpointStorage(new FileSystemCheckpointStorage("file:///checkpoint-dir"));
+```
+{{< /tab >}}
+{{< tab "Scala" >}}
+```scala
+val env = StreamExecutionEnvironment.getExecutionEnvironment
+env.setStateBackend(new HashMapStateBackend)
+env.getCheckpointConfig().setCheckpointStorage("file:///checkpoint-dir")
+
+
+// Advanced FsStateBackend configurations, such as write buffer size
+// can be set by using manually instantiating a FileSystemCheckpointStorage object.
+env.getCheckpointConfig().setCheckpointStorage(new FileSystemCheckpointStorage("file:///checkpoint-dir"))
+```
+{{< /tab >}}
+{{< /tabs>}}
+
+### RocksDBStateBackend 
+
+The legacy `RocksDBStateBackend` is equivalent to using [`EmbeddedRocksDBStateBackend`](#the-embeddedrocksdbstatebackend) and [`FileSystemCheckpointStorage`]({{< ref "docs/ops/state/checkpoints#the-filesystemcheckpointstorage" >}}).
+
+#### `flink-conf.yaml` configuration 
+
+```yaml
+state.backend: rocksdb
+state.checkpoints.dir: file:///checkpoint-dir/
+
+# Optional, Flink will automatically default to FileSystemCheckpointStorage
+# when a checkpoint directory is specified.
+state.checkpoint-storage: filesystem
+```
+
+#### Code Configuration
+
+{{< tabs "rocksdbstatebackendmigration" >}}
+{{< tab "Java" >}}
+```java
+StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+env.setStateBackend(new EmbeddedRocksDBStateBackend());
+env.getCheckpointConfig().setCheckpointStorage("file:///checkpoint-dir");
+
+
+// If you manually passed FsStateBackend into the RocksDBStateBackend constructor
+// to specify advanced checkpointing configurations such as write buffer size,
+// you can achieve the same results by using manually instantiating a FileSystemCheckpointStorage object.
+env.getCheckpointConfig().setCheckpointStorage(new FileSystemCheckpointStorage("file:///checkpoint-dir"));
+```
+{{< /tab >}}
+{{< tab "Scala" >}}
+```java
+val env = StreamExecutionEnvironment.getExecutionEnvironment
+env.setStateBackend(new EmbeddedRocksDBStateBackend)
+env.getCheckpointConfig().setCheckpointStorage("file:///checkpoint-dir")
+
+
+// If you manually passed FsStateBackend into the RocksDBStateBackend constructor
+// to specify advanced checkpointing configurations such as write buffer size,
+// you can achieve the same results by using manually instantiating a FileSystemCheckpointStorage object.
+env.getCheckpointConfig().setCheckpointStorage(new FileSystemCheckpointStorage("file:///checkpoint-dir"))
+```
+{{< /tab >}}
+{{< /tabs>}}
